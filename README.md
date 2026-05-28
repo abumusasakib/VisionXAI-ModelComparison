@@ -1,81 +1,133 @@
-# VisionXAI-ModelTesting — Inference-only README
+# VisionXAI-ModelComparison
 
-## Project Building and Running
+## Project Building and Running (Docker)
+
+This repository provides notebooks, model wrappers, and an evaluation script to compare image-captioning models (InceptionV3 vs EfficientNetB4) using a shared tokenizer and deterministic decoding.
 
 ### Build image
 
-```cmd
-cd environment && docker build . --tag 39bc7692-156c-4129-8fdf-5c202779e4d8
-```
-
-### Run image
+Use a descriptive image tag so you can run multiple builds without confusion. Example tag used here:
 
 ```cmd
-docker run --platform linux/amd64 --rm --gpus all --workdir /code --volume "%cd%/data":/data --volume "%cd%/code":/code --volume "%cd%/results":/results 39bc7692-156c-4129-8fdf-5c202779e4d8 bash run
+cd environment && docker build . --tag visionxai-modelcomparison:20251216
 ```
 
-## Running Jupyter for Development
+### Run image (recommended)
 
-1. **Start a Docker Container:**
-   You can start a new container from the image you built using the following command in Command Line:
+Run the container with mounted `data`, `code`, and `results` directories so model artifacts and outputs persist on the host. The examples below mount the current working directory's `data`, `code`, and `results` into the container.
 
-   ```cmd
-   docker run -p 8888:8888 -it --platform linux/amd64 --rm --gpus all --workdir /code --volume "%cd%/data":/data --volume "%cd%/code":/code --volume "%cd%/results":/results 39bc7692-156c-4129-8fdf-5c202779e4d8 /bin/bash
-   ```
+Windows (PowerShell):
 
-   This command will start a new container based on the image tagged as `39bc7692-156c-4129-8fdf-5c202779e4d8` and open an interactive shell (`/bin/bash`) within the container.
+```powershell
+docker run --platform linux/amd64 --rm --gpus all --workdir /code `
+  --volume "${PWD}/data":/data `
+  --volume "${PWD}/code":/code `
+  --volume "${PWD}/results":/results `
+  visionxai-modelcomparison:20251216 /bin/bash
+```
 
-2. **Activate Miniconda Environment:**
-   Before launching the Jupyter Notebook server, ensure that you have activated your Miniconda environment. If you haven't activated it yet, you can do so by running:
+Windows (Command Prompt):
 
-   ```bash
-   source /opt/conda/bin/activate
-   ```
+```cmd
+docker run --platform linux/amd64 --rm --gpus all --workdir /code ^
+  --volume "%CD%/data":/data ^
+  --volume "%CD%/code":/code ^
+  --volume "%CD%/results":/results ^
+  visionxai-modelcomparison:20251216 /bin/bash
+```
 
-   This command activates the Miniconda environment.
+Linux / macOS:
 
-3. **Launch Jupyter Notebook:**
-   Once your Miniconda environment is activated, you can launch the Jupyter Notebook server in Command Line by running:
+```bash
+docker run --platform linux/amd64 --rm --gpus all --workdir /code \
+  -v "$(pwd)/data:/data" -v "$(pwd)/code:/code" -v "$(pwd)/results:/results" \
+  visionxai-modelcomparison:20251216 /bin/bash
+```
 
-   ```bash
-   jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root
-   ```
+Once inside the container, the Python virtual environment is activated by default because `/opt/venv/bin` is in the PATH. If you need to activate it manually:
 
-   This command will start the Jupyter Notebook server and open a web browser with the Jupyter Dashboard, where you can navigate your files and create or open notebooks.
+```bash
+source /opt/venv/bin/activate
+```
 
-4. **Access Jupyter Notebook:**
-   After running the `jupyter notebook` command, you should see output in your terminal with a URL that starts with `http://127.0.0.1:8888`. Open this URL in your web browser, and you should be directed to the Jupyter Dashboard, where you can create or open notebooks.
+### Standardized evaluation workflow
 
-This repository contains an image-captioning notebook and related data. The default project state has been configured to run inference only (no training), to make it safe to run on machines without heavy compute or to produce evaluation outputs without modifying model weights.
+You can run the complete evaluation for both models in a single step using the master script `code/run`:
 
-## DO_TRAIN flag
+Windows (PowerShell):
 
-- Location: `code/bangla_image_caption_testing.ipynb` in the configuration cell near the top.
-- Purpose: Toggle whether the notebook should perform training or only run model inference.
-- Default value: `DO_TRAIN = False` (inference-only)
+```powershell
+docker run --platform linux/amd64 --rm --gpus all --workdir /code `
+  --volume "${PWD}/data":/data `
+  --volume "${PWD}/code":/code `
+  --volume "${PWD}/results":/results `
+  visionxai-modelcomparison:20251216 ./run
+```
 
-## Behavior
+Windows (Command Prompt):
 
-- If `DO_TRAIN = False` (the default):
-  - All training paths are disabled.
-  - The training loop function immediately returns and does not perform optimization.
-  - A safe no-op `train_step` is present so any accidental calls will not crash.
-  - The orchestrator will attempt to restore an existing checkpoint for inference (from `best_model_metadata.json` or the `train` checkpoint directory) but will not start new training.
+```cmd
+docker run --platform linux/amd64 --rm --gpus all --workdir /code ^
+  --volume "%CD%/data":/data ^
+  --volume "%CD%/code":/code ^
+  --volume "%CD%/results":/results ^
+  visionxai-modelcomparison:20251216 ./run
+```
 
-- If `DO_TRAIN = True`:
-  - The original training code paths are restored and the notebook will attempt to run training as before. Only flip this to True if you understand resource requirements (GPU, disk space) and have appropriate checkpoints/backups.
+Linux / macOS:
 
-## How to run inference (recommended)
+```bash
+docker run --platform linux/amd64 --rm --gpus all --workdir /code \
+  -v "$(pwd)/data:/data" -v "$(pwd)/code:/code" -v "$(pwd)/results:/results" \
+  visionxai-modelcomparison:20251216 ./run
+```
 
-1. Open the notebook `code/bangla_image_caption_testing.ipynb` in Jupyter or VS Code and run cells. The default configuration will skip training and proceed to load checkpoints and run the inference functions (e.g. `run_random_single()`, `run_random_batch()`, `run_first_n()`).
+Alternatively, you can run individual evaluations or customize the parameters as shown below.
 
-2. Headless execution example (must have Jupyter and required packages installed):
+- Ensure both models use their corresponding tokenizer/vocabulary files, or a shared tokenizer when appropriate.
+- When running evaluation inside the container (which mounts the `code` directory to `/code`), the script `evaluate_captions.py` is executed from the working directory `/code`, and the import paths do not require the `code.` prefix.
+- The datasets, models, and results are accessed via `/data` and `/results` mounts.
 
-   jupyter nbconvert --to notebook --execute "code\bangla_image_caption_testing.ipynb" --output "code\bangla_image_caption_testing_executed.ipynb"
+Example: Evaluate InceptionV3 inside Docker
 
-3. Check outputs in `/results/` (attention plots, HTML report, `captions.json`, BLEU scores CSV, etc.).
+```bash
+docker run --platform linux/amd64 --rm --gpus all --workdir /code \
+  --volume "$(pwd)/data":/data \
+  --volume "$(pwd)/code":/code \
+  --volume "$(pwd)/results":/results \
+  visionxai-modelcomparison:20251216 \
+  python evaluate_captions.py \
+    --model-module InceptionV3.model_factory:build_model \
+    --checkpoints-dir /data/InceptionV3/best_model \
+    --val-annotations /data/InceptionV3/test/BNATURE/caption/validation.txt \
+    --test-annotations /data/InceptionV3/test/BNATURE/caption/test.txt \
+    --vocab /data/InceptionV3/tokenizer.pkl \
+    --decode greedy --seed 1234 --output-dir /results/eval_inception
+```
 
-## Notes and safety
+Example: Evaluate EfficientNetB4 inside Docker
 
-- The notebook still requires model checkpoints and a tokenizer for meaningful output. If no checkpoints are available, inference will likely fail because model weights are not initialized.
-- To enable training, set `DO_TRAIN = True` in the configuration cell and ensure you have adequate compute & storage.
+```bash
+docker run --platform linux/amd64 --rm --gpus all --workdir /code \
+  --volume "$(pwd)/data":/data \
+  --volume "$(pwd)/code":/code \
+  --volume "$(pwd)/results":/results \
+  visionxai-modelcomparison:20251216 \
+  python evaluate_captions.py \
+    --model-module EfficientNetB4.model_factory:build_model \
+    --checkpoints-dir /data/EfficientNetB4/Model_weights/20250625_042759/Temp \
+    --val-annotations /data/InceptionV3/test/BNATURE/caption/validation.txt \
+    --test-annotations /data/InceptionV3/test/BNATURE/caption/test.txt \
+    --vocab /data/EfficientNetB4/Vocab/20250625_042759/vocab_20250625_042759 \
+    --decode greedy --seed 1234 --output-dir /results/eval_efficientnet
+```
+
+### Quick troubleshooting
+
+- If evaluation fails to restore a TF checkpoint, generate `predictions.json` from the notebook and re-run the evaluator pointing to the folder containing `predictions.json`.
+- Confirm the `--vocab` path points to the tokenizer/vocab file used to train both models (same tokenizer for fair comparison).
+- Set `--limit <N>` to run evaluation on a smaller subset of images (e.g. `--limit 10`) for fast debugging and verification.
+
+### Reproducibility
+
+Use the same `--vocab` and `--seed` for both model runs to ensure deterministic, comparable results.

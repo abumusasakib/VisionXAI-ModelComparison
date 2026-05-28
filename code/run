@@ -1,10 +1,20 @@
 #!/usr/bin/env bash
 set -ex
 
-# This is the master script for the capsule. When you click "Reproducible Run", the code in this file will execute.
-jupyter nbconvert \
-	--to 'html' \
-	--ExecutePreprocessor.allow_errors=True \
-	--ExecutePreprocessor.timeout=-1 \
-	--FilesWriter.build_directory=../results \
-	--execute bangla_image_caption_testing.ipynb
+# Run standardized evaluation for InceptionV3
+python evaluate_captions.py \
+  --model-module InceptionV3.model_factory:build_model \
+  --checkpoints-dir /data/InceptionV3/best_model \
+  --val-annotations /data/InceptionV3/test/BNATURE/caption/validation.txt \
+  --test-annotations /data/InceptionV3/test/BNATURE/caption/test.txt \
+  --vocab /data/InceptionV3/tokenizer.pkl \
+  --decode greedy --seed 1234 --limit 10 --output-dir /results/eval_inception
+
+# Run standardized evaluation for EfficientNetB4
+python evaluate_captions.py \
+  --model-module EfficientNetB4.model_factory:build_model \
+  --checkpoints-dir /data/EfficientNetB4/Model_weights/20250625_042759/Temp \
+  --val-annotations /data/InceptionV3/test/BNATURE/caption/validation.txt \
+  --test-annotations /data/InceptionV3/test/BNATURE/caption/test.txt \
+  --vocab /data/EfficientNetB4/Vocab/20250625_042759/vocab_20250625_042759 \
+  --decode greedy --seed 1234 --limit 10 --output-dir /results/eval_efficientnet
